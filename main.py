@@ -3,14 +3,98 @@ import sys
 import keyboard
 import pyautogui
 import time
+import threading
 from datetime import datetime
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QVBoxLayout, QWidget, QLabel,
     QLineEdit, QPushButton, QListWidget, QMenuBar, QMenu, QMessageBox, QDialog, QToolBar, QComboBox, QListWidgetItem, QHBoxLayout, QSpacerItem, QSizePolicy, QSystemTrayIcon
 )
 
-from PySide6.QtCore import Qt, QSettings, QTimer
-from PySide6.QtGui import QAction, QIcon
+from PySide6.QtCore import Qt, QSettings, QTimer, Signal, QObject, QSize
+from PySide6.QtGui import QAction, QIcon, QCursor
+
+class Hotkey_menu(QObject):
+    open_menu_signal = Signal()
+
+    def __init__(self):
+        super().__init__()
+        self.open_menu_signal.connect(self.open_menu)
+        self.hotkey = Settings_Data.get_settings_data(self, "run_hotkey")
+        self.menu_window = None
+        self.task_list = None
+
+    def open_menu(self):
+        if self.menu_window and self.menu_window.isVisible():
+            return
+
+        self.menu_window = QDialog()
+        self.menu_window.setWindowTitle("Hotkey Menü")
+        self.menu_window.setFixedSize(300, 300)
+
+        self.menu_window.setWindowFlag(Qt.WindowStaysOnTopHint)
+
+        cursor_pos = QCursor.pos()
+        self.menu_window.move(cursor_pos.x() + 20, cursor_pos.y() + 20)
+
+        layout = QVBoxLayout()
+
+        label = QLabel("Select Task")
+        layout.addWidget(label)
+
+        self.layout = QVBoxLayout()
+
+        self.task_list = QListWidget()
+        layout.addWidget(self.task_list)
+
+        self.show_tasks_toolbar()
+
+        button = QPushButton("Close")
+        button.clicked.connect(self.menu_window.close)
+        layout.addWidget(button)
+
+        layout.addLayout(self.layout)
+        self.menu_window.setLayout(layout)
+        self.menu_window.show()
+
+    def listen_for_hotkey(self):
+        keyboard.add_hotkey(self.hotkey, self.trigger_open_menu)
+        print(f"Hotkey '{self.hotkey}' wird überwacht...")
+        keyboard.wait()
+
+    def trigger_open_menu(self):
+        self.open_menu_signal.emit()
+
+    def show_tasks_toolbar(self):
+        for i in reversed(range(self.layout.count())):
+            widget = self.layout.itemAt(i).widget()
+            if widget:
+                widget.deleteLater()
+
+        conn = sqlite3.connect("task_manager.db")
+        cursor = conn.cursor()
+
+        cursor.execute("SELECT title FROM tasks")
+        tasks = cursor.fetchall()
+
+        for task_title in tasks:
+            task_button = QPushButton(task_title[0])
+            task_button.setStyleSheet("background-color: transparent; border: none; padding: 5px; font-size: 16px;")
+
+            item = QListWidgetItem()
+            item.setSizeHint(QSize(250,30))
+            self.task_list.addItem(item)
+            self.task_list.setItemWidget(item, task_button)
+
+            task_button.clicked.connect(lambda _, task_name=task_title[0]: self.on_task_clicked(task_name))
+
+        conn.close()
+
+    def on_task_clicked(self, task_name):
+        self.menu_window.close()
+        step_details = show_task.get_steps(self,task_name)
+        print(f"Task '{task_name}' wurde geklickt.")
+        run_task(step_details, 1)
+        
 
 
 class Planner(QDialog):
@@ -37,7 +121,7 @@ class Planner(QDialog):
         layout.addWidget(self.save_button)
 
         self.setLayout(layout)
-    
+
     def save_repeat_amount(self):
         amount = self.input_field_text.text()
         if amount == "" or amount == " ":
@@ -50,6 +134,51 @@ class Planner(QDialog):
 
     def get_repeat_amount(self):
         return self.repeat_amount
+
+class Settings_Data():
+    def __init__(self):
+        conn = sqlite3.connect("settings.db")
+        cursor = conn.cursor()
+
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS settings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        key TEXT UNIQUE NOT NULL,
+        value TEXT NOT NULL
+        )
+        """)
+        conn.commit()
+
+    def get_settings_data(self, key):
+        conn = sqlite3.connect("settings.db")
+        cursor = conn.cursor()
+
+        cursor.execute("SELECT value FROM settings WHERE key = ?", (key,))
+        result = cursor.fetchone()
+        return result[0] if result else None
+
+    def save_settings_data(self, key, value):
+        conn = sqlite3.connect("settings.db")
+        cursor = conn.cursor()
+
+        cursor.execute("""
+        INSERT INTO settings (key, value) 
+        VALUES (?, ?) 
+        ON CONFLICT(key) 
+        DO UPDATE SET value = excluded.value
+        """, (key, value))
+        conn.commit()
+        print(f"Einstellung '{key}' gespeichert oder aktualisiert.")
+        
+    def delete_settings_date(self, key):
+        conn = sqlite3.connect("settings.db")
+        cursor = conn.cursor()
+
+        cursor.execute("DELETE FROM settings WHERE key = ?", (key,))
+        conn.commit()
+        print(f"Einstellung '{key}' gelöscht.")
+
+
 
 class Settings(QDialog):
     def __init__(self, parent=None):
@@ -387,22 +516,9 @@ class TaskDialog(QDialog):
             QMessageBox.warning(self, "Input Error", "Please select a task.")
 
 
-
-class HotkeyManager:
-    def __init__(self):
-        self.hotkey = ""
-
-    def set_hotkey(self, hotkey):
-        self.hotkey = hotkey
-        QMessageBox.information(None, "Hotkey", f"Hotkey gesetzt: {self.hotkey}")
-
-    def get_hotkey(self):
-        return self.hotkey
-
 class HotkeyDialog(QDialog):
-    def __init__(self, hotkey_manager, parent=None):
+    def __init__(self,parent=None):
         super().__init__(parent)
-        self.hotkey_manager = hotkey_manager
         self.setWindowTitle("Set Hotkey")
         self.setFixedSize(300, 150)
 
@@ -422,7 +538,9 @@ class HotkeyDialog(QDialog):
 
     def save_hotkey(self):
         hotkey = self.input_field.text()
-        self.hotkey_manager.set_hotkey(hotkey)
+        Settings_Data.save_settings_data(self,"run_hotkey", hotkey)
+        self.get_hotkey = Settings_Data.get_settings_data(self,"run_hotkey")
+        QMessageBox.information(None, "Hotkey", f"Hotkey gesetzt: {self.get_hotkey}")
         self.accept()
 
 class TaskManager_Gui(QMainWindow):
@@ -434,8 +552,10 @@ class TaskManager_Gui(QMainWindow):
 
         self.setWindowIcon(QIcon('./to-do-list.png'))
         
-        self.hotkey_manager = HotkeyManager()
+        
         self.task_manager = TaskManager()
+        self.settings_data = Settings_Data()
+        self.hotkey_menu = Hotkey_menu()
 
         self.settings = QSettings("Luca_Dev", "TaskManager")
 
@@ -532,7 +652,7 @@ class TaskManager_Gui(QMainWindow):
         connection.close()
  
     def open_hotkey_window(self):
-        dialog = HotkeyDialog(self.hotkey_manager, self)
+        dialog = HotkeyDialog(self)
         dialog.exec()
     def open_task_window(self):
         dialog = TaskDialog(self.task_manager, self)
@@ -683,6 +803,13 @@ class TaskManager_Gui(QMainWindow):
 if __name__ == "__main__":
     app = QApplication(sys.argv)
 
+    hotkey_menu = Hotkey_menu()
+
+    hotkey_thread = threading.Thread(target=hotkey_menu.listen_for_hotkey)
+    hotkey_thread.daemon = True  # Der Thread läuft im Hintergrund und wird beim Schließen des Hauptprogramms beendet
+    hotkey_thread.start()
+
+    
     # Setze globales Stylesheet für Dark-Mode mit grünen Akzenten
     app.setStyleSheet("""
         QMainWindow {
@@ -742,3 +869,5 @@ if __name__ == "__main__":
     task_manager.show()
 
     app.exec()
+
+    
