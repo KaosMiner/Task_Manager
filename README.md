@@ -7,8 +7,8 @@ This is a simple Python-based task manager designed to automate various tasks. T
 ## Features
 
 - **Task Automation:** Automate simple tasks using Python scripts.
-- **Run Task with Hotkey:** You can select a hotkey and then use it to execute a desired task.
-- **Add new Hotkey to Task**: Go to File > Settings and there is a option to create a new hotkey. In the first input field you type the hotkey (e. g. Ctrl + Shift + Q) and on the second field which type (Key, KeyCombination, ...)
+- **Run Task with Hotkey:** You can select a hotkey and use it to execute a desired task.
+- **Add New Hotkeys to Tasks:** Go to **File > Settings**, where you can create a new hotkey. In the first input field, type the hotkey (e.g., Ctrl + Shift + Q), and in the second field, specify the type (e.g., Key, KeyCombination, etc.).
 - **Simple Interface:** A basic, user-friendly interface to manage tasks.
 
 ## Requirements
