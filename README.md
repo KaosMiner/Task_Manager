@@ -22,3 +22,7 @@ This is a simple Python-based task manager designed to automate various tasks. T
    ```bash
    git clone https://github.com/KaosMiner/Task_Manager.git
    cd Task_Manager
+
+
+   
+**Let me know if you'd like further adjustments or additions!**
