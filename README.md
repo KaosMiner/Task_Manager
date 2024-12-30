@@ -7,8 +7,8 @@ This is a simple Python-based task manager designed to automate various tasks. T
 ## Features
 
 - **Task Automation:** Automate simple tasks using Python scripts.
-- **Scheduling:** Schedule tasks to run at specific times.
-- **Customizable:** Easily modify or extend the functionality to fit personal needs.
+- **Run Task with Hotkey:** You can select a hotkey and then use it to execute a desired task.
+- **Add new Hotkey to Task**: Go to File > Settings and there is a option to create a new hotkey. In the first input field you type the hotkey (e. g. Ctrl + Shift + Q) and on the second field which type (Key, KeyCombination, ...)
 - **Simple Interface:** A basic, user-friendly interface to manage tasks.
 
 ## Requirements
@@ -20,5 +20,5 @@ This is a simple Python-based task manager designed to automate various tasks. T
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/yourusername/task-manager.git
-   cd task-manager
+   git clone https://github.com/KaosMiner/Task_Manager.git
+   cd Task_Manager
