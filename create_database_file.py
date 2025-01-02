@@ -74,7 +74,8 @@ def create_database():
         ("Alt + Tab", "KeyCombination", "Wechselt zwischen offenen Programmen."),
 
         ("Text", "Text", "Text den man schreibt z.B. Hello World"),
-        ("Wait", "Action", "Wartet eine Bestimmte Zeit")
+        ("Wait", "Action", "Wartet eine Bestimmte Zeit"),
+        ("Custom Input", "Custom", "Wartet auf einen Input")
     ]
 
     # Einfügen der Tastatur-Daten in die Tabelle

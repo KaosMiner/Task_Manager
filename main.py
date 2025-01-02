@@ -11,7 +11,91 @@ from PySide6.QtWidgets import (
 )
 
 from PySide6.QtCore import Qt, QSettings, QTimer, Signal, QObject, QSize
-from PySide6.QtGui import QAction, QIcon, QCursor
+from PySide6.QtGui import QAction, QIcon, QCursor, QIntValidator
+
+class Template_Menu(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Templates")
+        self.setFixedSize(300, 300)
+
+        layout = QVBoxLayout()
+
+        self.label = QLabel("Templates:")
+        layout.addWidget(self.label)
+
+        self.templates_list = QListWidget()
+        layout.addWidget(self.templates_list) 
+
+        self.setLayout(layout)
+
+    def open_template(self):
+        pass
+
+
+    def create_template_db(self):
+        conn = sqlite3.connect("templates.db")
+        cursor = conn.cursor()
+
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS tasks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT NOT NULL,
+            description TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+        """)
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS steps (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            task_id INTEGER NOT NULL,
+            step_order INTEGER NOT NULL,
+            action TEXT NOT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (task_id) REFERENCES tasks (id) ON DELETE CASCADE
+        );
+        """)
+        conn.commit()
+
+class Custom_Input(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Custom Input")
+        self.setFixedSize(300, 150)
+        self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)
+        
+        layout = QVBoxLayout()
+
+        self.label = QLabel("Custom Input:")
+        layout.addWidget(self.label)
+
+        self.input_custom = QLineEdit()
+        layout.addWidget(self.input_custom)
+
+        self.save = QPushButton("Save")
+        self.save.clicked.connect(self.accept)
+        layout.addWidget(self.save)
+
+        self.setLayout(layout)
+
+        self.input_value = None 
+
+        self.raise_()
+        self.activateWindow()
+    def accept(self):
+        self.input_value = self.input_custom.text()
+        super().accept()
+
+    def get_input(self):
+        return self.input_value
+    
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key_Return or event.key() == Qt.Key_Enter:
+            self.accept()
+        else:
+            super().keyPressEvent(event)
+
 
 class Hotkey_menu(QObject):
     open_menu_signal = Signal()
@@ -114,6 +198,8 @@ class Planner(QDialog):
         layout.addWidget(self.label2)
 
         self.input_field_text = QLineEdit()
+        self.input_field_text.setValidator(QIntValidator(1,100))
+        self.input_field_text.setPlaceholderText("1-100")
         layout.addWidget(self.input_field_text) 
 
         self.save_button = QPushButton("Save")
@@ -188,6 +274,7 @@ class Settings(QDialog):
 
         layout = QVBoxLayout()
 
+        # Create new Hotkey
         self.hotkey_add_label = QLabel("Create new Hotkey:")
         layout.addWidget(self.hotkey_add_label)
 
@@ -199,34 +286,46 @@ class Settings(QDialog):
         self.input_type.setPlaceholderText("Type (Key, ControlKey, ..., other)")
         layout.addWidget(self.input_type)
 
+        # Time before running Task
+        self.time_label = QLabel("Enter Time before running task:")
+        layout.addWidget(self.time_label)
+
+        self.input_time = QLineEdit()
+        self.input_time.setValidator(QIntValidator(1, 10000))
+        self.input_time.setPlaceholderText("Any Number")
+        layout.addWidget(self.input_time)
+
         spacer = QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
         layout.addItem(spacer)
 
         self.save_button = QPushButton("Save")
-        self.save_button.clicked.connect(lambda:self.new_hotkey())
+        self.save_button.clicked.connect(self.save_settings)
         layout.addWidget(self.save_button)
 
         layout.setContentsMargins(5, 5, 5, 5) 
         layout.setSpacing(5) 
         self.setLayout(layout)
 
-    def new_hotkey(self):
+    def save_settings(self):
+        # First try to save the hotkey
         input_hotkey_text = self.input_hotkey.text()
         input_type_text = self.input_type.text()
 
-        if not input_hotkey_text or not input_type_text:
-            QMessageBox.warning(self, "Input Error", "Please fill in both fields.")
-            return
+        if input_hotkey_text and input_type_text:
+            self.new_hotkey(input_hotkey_text, input_type_text)
+        else:
+            self.new_running_time()
 
+    def new_hotkey(self, input_hotkey_text, input_type_text):
         reply = QMessageBox.question(self, "Save Hotkey", "Are you sure you want to save this hotkey?",
-                                 QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+                                     QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
 
         if reply == QMessageBox.Yes:
             try:
                 with sqlite3.connect("keyboard_data.db") as conn:
                     cursor = conn.cursor()
                     cursor.execute("INSERT INTO keys (name, description, type) VALUES (?, ?, ?)",
-                               (input_hotkey_text, " ", input_type_text))
+                                   (input_hotkey_text, " ", input_type_text))
                     conn.commit()
 
                 self.input_hotkey.clear()
@@ -236,15 +335,33 @@ class Settings(QDialog):
                 QMessageBox.information(self, "Success", "Hotkey saved successfully.")
             except sqlite3.Error as e:
                 QMessageBox.critical(self, "Database Error", f"An error occurred: {e}")
-            
 
+    def new_running_time(self):
+        running_time_amount = self.input_time.text()
+
+        # Check if the running time is valid (e.g., not empty)
+        if running_time_amount:
+            Settings_Data.save_settings_data(self, "time_after_running", running_time_amount)
+            self.close()
+            QMessageBox.information(self, "Success", "Time before running task saved successfully.")
+        else:
+            QMessageBox.warning(self, "Input Error", "Please enter a valid time.")
 
 class run_task():
     def __init__(self, step_details, repeat_amount):
         self.step_details = step_details
         self.repeat_amount = repeat_amount
         print(repeat_amount)
-        time.sleep(3)
+
+        current_sleep_time = Settings_Data.get_settings_data(self, "time_after_running")
+        
+        if current_sleep_time is None:
+            Settings_Data.save_settings_data(self, "time_after_running", 3)
+            self.sleep_time = 3
+        else:
+            self.sleep_time = int(current_sleep_time)
+
+        time.sleep(self.sleep_time)
         self.execute_steps(step_details)
 
     def execute_steps(self, step_details):
@@ -252,7 +369,18 @@ class run_task():
             for index, step in enumerate(step_details, start=1):
                 if isinstance(step, dict) and "action" in step:
                     action = step["action"]
-                    if self.action_exists(action):
+                    if action.lower() == "custom input":
+                        custom_input_dialog = Custom_Input()
+                        custom_input_dialog.exec()
+                        custom_input = custom_input_dialog.get_input()
+
+                        if not custom_input:
+                            return
+                        else:
+                            print(f"Custom Input received: {custom_input}")
+                            self.write_action(custom_input)
+
+                    elif self.action_exists(action):
                         self.press_key(action)
                     elif action.lower().endswith("seconds"):
                         self.sleep_for_seconds(action)
@@ -433,7 +561,7 @@ class TaskDialog(QDialog):
         
         self.task_manager = task_manager
         self.setWindowTitle("Create Task")
-        self.setFixedSize(300, 500)
+        self.setFixedSize(300, 450)
 
         layout = QVBoxLayout()
 
@@ -552,10 +680,11 @@ class TaskManager_Gui(QMainWindow):
 
         self.setWindowIcon(QIcon('./to-do-list.png'))
         
-        
         self.task_manager = TaskManager()
         self.settings_data = Settings_Data()
         self.hotkey_menu = Hotkey_menu()
+
+        self.template_data = Template_Menu.create_template_db(self)
 
         self.settings = QSettings("Luca_Dev", "TaskManager")
 
@@ -621,9 +750,16 @@ class TaskManager_Gui(QMainWindow):
         planner_menu.addAction("Show Time", self.close)
         menu_bar.addMenu(planner_menu)
 
+        # Templates Menu
+        templates_menu = QMenu("Templates", self)
+        templates_menu.addAction("Add Template", self.close)
+        templates_menu.addAction("Show Templates", self.open_templates_menu)
+        menu_bar.addMenu(templates_menu)
+
     def create_toolbar(self):
         self.toolbar_tasks = QToolBar("Tasks", self)
-        self.addToolBar(self.toolbar_tasks)
+        self.toolbar_tasks.setObjectName("Tasks")
+        self.addToolBar(Qt.LeftToolBarArea, self.toolbar_tasks)
 
     def create_tables(self):
         connection = sqlite3.connect('task_manager.db')
@@ -664,6 +800,9 @@ class TaskManager_Gui(QMainWindow):
         dialog = Planner(self)
         dialog.exec()
         self.repeat_amount = dialog.get_repeat_amount()
+    def open_templates_menu(self):
+        dialog = Template_Menu(self)
+        dialog.exec()
 
     def restore_state(self):
         try:
