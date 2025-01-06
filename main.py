@@ -7,10 +7,10 @@ import threading
 from datetime import datetime
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QVBoxLayout, QWidget, QLabel,
-    QLineEdit, QPushButton, QListWidget, QMenuBar, QMenu, QMessageBox, QDialog, QToolBar, QComboBox, QListWidgetItem, QHBoxLayout, QSpacerItem, QSizePolicy, QSystemTrayIcon
+    QLineEdit, QPushButton, QListWidget, QMenuBar, QMenu, QMessageBox, QDialog, QToolBar, QComboBox, QListWidgetItem, QHBoxLayout, QSpacerItem, QSizePolicy, QSystemTrayIcon, QDateTimeEdit, QTimeEdit, QSlider
 )
 
-from PySide6.QtCore import Qt, QSettings, QTimer, Signal, QObject, QSize
+from PySide6.QtCore import Qt, QSettings, QTimer, Signal, QObject, QSize, QTime
 from PySide6.QtGui import QAction, QIcon, QCursor, QIntValidator
 
 class Template_Menu(QDialog):
@@ -57,6 +57,8 @@ class Template_Menu(QDialog):
         );
         """)
         conn.commit()
+
+
 
 class Custom_Input(QDialog):
     def __init__(self, parent=None):
@@ -746,8 +748,6 @@ class TaskManager_Gui(QMainWindow):
         # Planner Menu
         planner_menu = QMenu("Planner", self)
         planner_menu.addAction("Task Repeat Amount", self.open_repeat_menu)
-        planner_menu.addAction("Add Time", self.close)
-        planner_menu.addAction("Show Time", self.close)
         menu_bar.addMenu(planner_menu)
 
         # Templates Menu
@@ -799,7 +799,7 @@ class TaskManager_Gui(QMainWindow):
     def open_repeat_menu(self):
         dialog = Planner(self)
         dialog.exec()
-        self.repeat_amount = dialog.get_repeat_amount()
+        self.repeat_amount = dialog.get_repeat_amount()  
     def open_templates_menu(self):
         dialog = Template_Menu(self)
         dialog.exec()
