@@ -1,8 +1,11 @@
 import sqlite3
 import sys
+import os
 import keyboard
 import pyautogui
+import platform
 import time
+import subprocess
 import threading
 from datetime import datetime
 from PySide6.QtWidgets import (
@@ -11,7 +14,90 @@ from PySide6.QtWidgets import (
 )
 
 from PySide6.QtCore import Qt, QSettings, QTimer, Signal, QObject, QSize, QTime
-from PySide6.QtGui import QAction, QIcon, QCursor, QIntValidator
+from PySide6.QtGui import QAction, QIcon, QCursor, QIntValidator, QMouseEvent, QPainter, QColor
+
+
+if not os.path.exists('already_run_create_db.txt'):
+    # Ausführen von create_database_file.py
+    subprocess.run(['python', 'create_database_file.py'])
+    
+    # Erstellen einer Datei, die signalisiert, dass das Skript schon ausgeführt wurde
+    with open('already_run_create_db.txt', 'w') as f:
+        f.write('Das Skript create_database_file.py wurde bereits ausgeführt.')
+else:
+    print("create_database_file.py wurde bereits ausgeführt.")
+
+
+class set_mouse_position(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+
+        
+
+    
+
+
+class first_time_setup(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Setup Manager")
+        self.setFixedSize(260, 270)
+        self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)
+        self.move(290,150)
+
+        layout = QVBoxLayout(self)
+
+        self.label_os = QLabel("Select your operating system:")
+        layout.addWidget(self.label_os)
+
+        self.os_combobox = QComboBox(self)
+        self.os_combobox.addItems(["Windows", "macOS", "Linux"])
+        layout.addWidget(self.os_combobox)
+
+        spacer = QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
+        layout.addItem(spacer)
+
+        self.label_key = QLabel("Enter a key for the quick task menu:")
+        layout.addWidget(self.label_key)
+
+        self.key_input = QLineEdit(self)
+        self.key_input.setPlaceholderText("Enter Hotkey (Ctrl + Shift + Q)") 
+        layout.addWidget(self.key_input)
+
+        self.ok_button = QPushButton("Confirm", self)
+        self.ok_button.clicked.connect(self.on_confirm)
+        layout.addWidget(self.ok_button)
+
+        self.setLayout(layout)
+    
+    def closeEvent(self, event):
+        print("Dialog is being closed!")
+        Settings_Data.save_settings_data(self, "setup_finish", "False")
+        QApplication.quit()
+        event.accept()
+        
+    def on_confirm(self):
+        reply = QMessageBox.question(self, "Save Settings", "Are you sure you want to save?",
+                                     QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+
+        if reply == QMessageBox.Yes:
+            self.Settings_Data = Settings_Data()
+
+            self.os = self.os_combobox.currentText()
+            self.hotkey = self.key_input.text()
+
+            if self.os:
+                self.save_os = Settings_Data.save_settings_data(self, "OS", self.os)
+            if self.hotkey:
+                self.save_hotkey = Settings_Data.save_settings_data(self,"run_hotkey",self.hotkey)
+
+            if not self.os or not self.hotkey:
+                QMessageBox.warning(self, "Incomplete Settings", "Please ensure all fields are filled.")
+                Settings_Data.save_settings_data(self, "setup_finish", "False")
+            else:
+                Settings_Data.save_settings_data(self, "setup_finish", "True")
+                self.accept()
+
 
 class Template_Menu(QDialog):
     def __init__(self, parent=None):
@@ -353,7 +439,7 @@ class run_task():
     def __init__(self, step_details, repeat_amount):
         self.step_details = step_details
         self.repeat_amount = repeat_amount
-        print(repeat_amount)
+       # print(repeat_amount)
 
         current_sleep_time = Settings_Data.get_settings_data(self, "time_after_running")
         
@@ -371,7 +457,19 @@ class run_task():
             for index, step in enumerate(step_details, start=1):
                 if isinstance(step, dict) and "action" in step:
                     action = step["action"]
-                    if action.lower() == "custom input":
+                    if action.lower() == "windows key (win)" or action.lower() == "command key (cmd)" or action.lower() == "super key (linux)":
+                        os_key = None
+                        os_key_map = {
+                            "windows key (win)": "win",
+                            "command key (cmd)": "cmd",
+                            "super key (linux)": "super"
+                        }
+                        os_key = os_key_map.get(action.lower())
+                        
+                        if os_key:
+                            self.press_key(os_key)
+
+                    elif action.lower() == "custom input":
                         custom_input_dialog = Custom_Input()
                         custom_input_dialog.exec()
                         custom_input = custom_input_dialog.get_input()
@@ -676,7 +774,7 @@ class HotkeyDialog(QDialog):
 class TaskManager_Gui(QMainWindow):
     def __init__(self):
         super().__init__()
-
+        
         self.delete_button = None
         self.run_button = None
 
@@ -685,6 +783,15 @@ class TaskManager_Gui(QMainWindow):
         self.task_manager = TaskManager()
         self.settings_data = Settings_Data()
         self.hotkey_menu = Hotkey_menu()
+        self.first_time_setup = first_time_setup()
+   
+       # self.set_mouse_position = set_mouse_position()
+       # self.set_mouse_position.show()
+
+        self.setup_finished = self.settings_data.get_settings_data("setup_finish")
+
+        if self.setup_finished == "False":
+            self.first_time_setup.exec()
 
         self.template_data = Template_Menu.create_template_db(self)
 
@@ -724,6 +831,32 @@ class TaskManager_Gui(QMainWindow):
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.show_tasks_toolbar)  # Verbinde das Timeout-Signal mit show_tasks_toolbar
         self.timer.start(2000)
+
+        setup = Settings_Data.get_settings_data(self,"setup_finish")
+        if setup == "False":
+            sys.exit()
+        elif setup == "True":
+            pass
+        
+        self.create_os_button()
+    def create_os_button(self):
+        os_button = self.settings_data.get_settings_data("OS")
+        conn = sqlite3.connect("keyboard_data.db")
+        cursor = conn.cursor()
+
+        if os_button == "Windows":
+            os_button = "Windows Key (WIN)"
+        elif os_button == "Linux":
+            os_button = "Super Key (Linux)"
+        elif os_button == "macOS":
+            os_button = "Command Key (CMD)"
+
+        cursor.execute('''
+        INSERT INTO keys (name, type, description) VALUES (?, ?, ?)
+        ''', (os_button, "Main_Key", f"This is the {os_button} on your system."))
+
+        conn.commit()
+        conn.close()
 
     def create_menubar(self):
         # Erstellen der nativen Menüleiste
@@ -1009,4 +1142,3 @@ if __name__ == "__main__":
 
     app.exec()
 
-    

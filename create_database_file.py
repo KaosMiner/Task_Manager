@@ -75,7 +75,7 @@ def create_database():
 
         ("Text", "Text", "Text den man schreibt z.B. Hello World"),
         ("Wait", "Action", "Wartet eine Bestimmte Zeit"),
-        ("Custom Input", "Custom", "Wartet auf einen Input")
+        ("Custom Input", "Custom", "Wartet auf einen Input"),
     ]
 
     # Einfügen der Tastatur-Daten in die Tabelle
